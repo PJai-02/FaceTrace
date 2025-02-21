@@ -1,19 +1,14 @@
-# utils/authentication.py
-import streamlit as st
-
-def login(username: str, password: str) -> bool:
+def login(username, password):
     """
-    Validates user credentials. If valid, sets session state 'logged_in' to True.
+    Dummy authentication function.
+    For testing, this function returns True if the username equals the password.
     """
-    if username == "admin" and password == "admin":
-        st.session_state["logged_in"] = True
+    if username and password and username == password:
         return True
-    else:
-        st.session_state["logged_in"] = False
-        return False
+    return False
 
 def logout():
     """
-    Logs out the current user by resetting session state.
+    Dummy logout function.
     """
-    st.session_state["logged_in"] = False
+    return True

@@ -1,152 +1,89 @@
-# # utils/file_manager.py
 # import os
-# import json
-# from pathlib import Path
 # import cv2
+# import uuid
 
-# # Base directory where saved face data will be stored
-# DATA_DIR = Path("data/saved")
+# # Directory to store saved face images.
+# DATA_DIR = "saved_faces"
+# if not os.path.exists(DATA_DIR):
+#     os.makedirs(DATA_DIR)
 
-# def save_face_data(roll_no: str, name: str, image) -> bool:
+# # In-memory database for saved faces.
+# # In production, consider using a persistent database.
+# saved_faces_db = []
+
+# def save_face_data(roll_no, name, img):
 #     """
-#     Saves the captured face image and metadata to a new folder named after the roll number.
-    
-#     Parameters:
-#         roll_no: Unique roll number (string) that will be used as the folder name.
-#         name: Name of the person.
-#         image: The image (as an OpenCV BGR image) to be saved.
-    
-#     Returns:
-#         True if data is saved successfully, else False.
+#     Saves the face image to disk and stores its info in a global list.
 #     """
 #     try:
-#         # Create folder for the given roll number if it doesn't exist
-#         folder_path = DATA_DIR / roll_no
-#         folder_path.mkdir(parents=True, exist_ok=True)
-        
-#         # Save image as {roll_no}.jpg
-#         image_path = folder_path / f"{roll_no}.jpg"
-#         cv2.imwrite(str(image_path), image)
-        
-#         # Save metadata as {roll_no}.txt in JSON format
-#         metadata = {"roll_no": roll_no, "name": name}
-#         metadata_path = folder_path / f"{roll_no}.txt"
-#         with open(metadata_path, "w") as f:
-#             json.dump(metadata, f)
-            
+#         filename = f"{name}_{roll_no}_{uuid.uuid4().hex}.jpg"
+#         filepath = os.path.join(DATA_DIR, filename)
+#         cv2.imwrite(filepath, img)
+#         face_entry = {"roll_no": roll_no, "name": name, "image_path": filepath}
+#         saved_faces_db.append(face_entry)
 #         return True
 #     except Exception as e:
-#         print(f"Error saving face data: {e}")
+#         print("Error saving face data:", e)
 #         return False
 
-# def get_all_saved_faces() -> list:
+# def get_all_saved_faces():
 #     """
-#     Retrieves a list of dictionaries containing saved face data.
-    
-#     Each dictionary contains:
-#         - roll_no: The folder name (roll number)
-#         - name: Person's name from metadata
-#         - image_path: Path to the saved face image
+#     Returns the list of saved face entries.
 #     """
-#     saved_faces = []
-#     if DATA_DIR.exists():
-#         for folder in DATA_DIR.iterdir():
-#             if folder.is_dir():
-#                 metadata_path = folder / f"{folder.name}.txt"
-#                 image_path = folder / f"{folder.name}.jpg"
-#                 if metadata_path.exists() and image_path.exists():
-#                     try:
-#                         with open(metadata_path, "r") as f:
-#                             metadata = json.load(f)
-#                         saved_faces.append({
-#                             "roll_no": folder.name,
-#                             "name": metadata.get("name", ""),
-#                             "image_path": str(image_path)
-#                         })
-#                     except Exception as e:
-#                         print(f"Error reading metadata for {folder.name}: {e}")
-#     return saved_faces
+#     return saved_faces_db
 
-# utils/file_manager.py
 import os
-import json
-from pathlib import Path
 import cv2
-import numpy as np
-import face_recognition
+import uuid
+import json
 
-# Base directory for saved face data
-DATA_DIR = Path("data/saved")
+# Directory to store saved face images.
+DATA_DIR = "saved_faces"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
-def save_face_data(roll_no: str, name: str, image) -> bool:
+# JSON file to persist saved face metadata.
+DB_FILE = "saved_faces_db.json"
+
+def load_db():
+    """Load the saved face metadata from the JSON file."""
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print("Error loading database:", e)
+            return []
+    else:
+        return []
+
+def save_db(db):
+    """Save the face metadata to the JSON file."""
+    try:
+        with open(DB_FILE, "w") as f:
+            json.dump(db, f, indent=4)
+    except Exception as e:
+        print("Error saving database:", e)
+
+def save_face_data(roll_no, name, img):
     """
-    Saves the captured face image, metadata, and computed face encoding 
-    (using NumPy's .npy format) to a folder named after the roll number.
-    
-    Parameters:
-        roll_no: Unique roll number (used as the folder name).
-        name: Name of the person.
-        image: The image (BGR format as read by OpenCV) to be saved.
-    
-    Returns:
-        True if saving is successful; False otherwise.
+    Saves the face image to disk and updates the persistent JSON database.
+    Returns True if saving was successful, False otherwise.
     """
     try:
-        # Create folder for this face data if it doesn't exist.
-        folder_path = DATA_DIR / roll_no
-        folder_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save the face image as {roll_no}.jpg.
-        image_path = folder_path / f"{roll_no}.jpg"
-        cv2.imwrite(str(image_path), image)
-        
-        # Save metadata as JSON in {roll_no}.txt.
-        metadata = {"roll_no": roll_no, "name": name}
-        metadata_path = folder_path / f"{roll_no}.txt"
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f)
-        
-        # Convert image from BGR to RGB for face_recognition processing.
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        face_locations = face_recognition.face_locations(image_rgb)
-        if face_locations:
-            # Compute the encoding (using num_jitters=0 for speed).
-            encoding = face_recognition.face_encodings(image_rgb, face_locations, num_jitters=0)[0]
-            # Save the encoding as a .npy file.
-            encoding_path = folder_path / f"{roll_no}_encoding.npy"
-            np.save(str(encoding_path), encoding)
-        else:
-            print("No face detected in the saved image.")
-            
+        filename = f"{name}_{roll_no}_{uuid.uuid4().hex}.jpg"
+        filepath = os.path.join(DATA_DIR, filename)
+        cv2.imwrite(filepath, img)
+        face_entry = {"roll_no": roll_no, "name": name, "image_path": filepath}
+        # Load the current database, update it, and save it back.
+        db = load_db()
+        db.append(face_entry)
+        save_db(db)
         return True
     except Exception as e:
-        print(f"Error saving face data: {e}")
+        print("Error saving face data:", e)
         return False
 
-def get_all_saved_faces() -> list:
-    """
-    Retrieves saved face data as a list of dictionaries.
-    
-    Each dictionary contains:
-        - roll_no: The folder name (roll number)
-        - name: Person's name (from metadata)
-        - image_path: Path to the saved face image
-    """
-    saved_faces = []
-    if DATA_DIR.exists():
-        for folder in DATA_DIR.iterdir():
-            if folder.is_dir():
-                metadata_path = folder / f"{folder.name}.txt"
-                image_path = folder / f"{folder.name}.jpg"
-                if metadata_path.exists() and image_path.exists():
-                    try:
-                        with open(metadata_path, "r") as f:
-                            metadata = json.load(f)
-                        saved_faces.append({
-                            "roll_no": folder.name,
-                            "name": metadata.get("name", ""),
-                            "image_path": str(image_path)
-                        })
-                    except Exception as e:
-                        print(f"Error reading metadata for {folder.name}: {e}")
-    return saved_faces
+def get_all_saved_faces():
+    """Returns the list of saved face entries from the persistent database."""
+    return load_db()
